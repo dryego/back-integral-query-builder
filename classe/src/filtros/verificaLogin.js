@@ -14,14 +14,12 @@ const verificaLogin = async (req, res, next) => {
 
         const { id } = jwt.verify(token, senhaHash);
 
-        const query = 'select * from usuarios where id = $1';
-        const { rows, rowCount } = await conexao.query(query, [id]);
-
-        if (rowCount === 0) {
+        const buscarUsuario = await conexao.knex('usuarios').where({ id }).first();
+        if (!buscarUsuario) {
             return res.status(404).json('Usuario não encontrado');
         }
 
-        const { senha, ...usuario } = rows[0];
+        const { senha, ...usuario } = buscarUsuario;
 
         req.usuario = usuario;
 

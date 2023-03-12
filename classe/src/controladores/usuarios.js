@@ -21,18 +21,19 @@ const cadastrarUsuario = async (req, res) => {
     }
 
     try {
-        const { rowCount: quantidadeUsuarios } = await conexao.query('select * from usuarios where email = $1', [email]);
 
-        if (quantidadeUsuarios > 0) {
+        const buscarUsuario = await conexao.knex('usuarios').where('email', email).first();
+        console.log(buscarUsuario);
+
+        if (buscarUsuario !== undefined) {
             return res.status(400).json("O email já existe");
         }
 
         const senhaCriptografada = await bcrypt.hash(senha, 10);
 
-        const query = 'insert into usuarios (nome, email, senha, nome_loja) values ($1, $2, $3, $4)';
-        const usuario = await conexao.query(query, [nome, email, senhaCriptografada, nome_loja]);
+        const novoUsuario = await conexao.knex('usuarios').insert({ nome, email, senha: senhaCriptografada, nome_loja })
 
-        if (usuario.rowCount === 0) {
+        if (!novoUsuario) {
             return res.status(400).json("O usuário não foi cadastrado.");
         }
 
@@ -47,56 +48,35 @@ const obterPerfil = async (req, res) => {
 }
 
 const atualizarPerfil = async (req, res) => {
-    const { nome, email, senha, nome_loja } = req.body;
+    const { nome, email, nome_loja } = req.body;
+    let { senha } = req.body
+    const { id } = req.usuario;
 
     if (!nome && !email && !senha && !nome_loja) {
         return res.status(404).json('É obrigatório informar ao menos um campo para atualização');
     }
 
     try {
-        // update usuarios set nome = $1, email = $2...
-        const body = {};
-        const params = [];
-        let n = 1;
-
-        if (nome) {
-            body.nome = nome;
-            params.push(`nome = $${n}`);
-            n++;
-        }
 
         if (email) {
             if (email !== req.usuario.email) {
-                const { rowCount: quantidadeUsuarios } = await conexao.query('select * from usuarios where email = $1', [email]);
+                const buscarEmail = await conexao.knex('usuarios').where({ email }).first('email');
 
-                if (quantidadeUsuarios > 0) {
+                if (buscarEmail === email) {
                     return res.status(400).json("O email já existe");
                 }
             }
 
-            body.email = email;
-            params.push(`email = $${n}`);
-            n++;
         }
 
         if (senha) {
-            body.senha = await bcrypt.hash(senha, 10);
-            params.push(`senha = $${n}`);
-            n++;
+            const senhaCriptografada = await bcrypt.hash(senha, 10);
+            senha = senhaCriptografada;
         }
 
-        if (nome_loja) {
-            body.nome_loja = nome_loja;
-            params.push(`nome_loja = $${n}`);
-            n++;
-        }
+        const atualizarUsuario = await conexao.knex('usuarios').update({ nome, email, senha, nome_loja }).where({ id }).returning('*');
 
-        const valores = Object.values(body);
-        valores.push(req.usuario.id);
-        const query = `update usuarios set ${params.join(', ')} where id = $${n}`;
-        const usuarioAtualizado = await conexao.query(query, valores);
-
-        if (usuarioAtualizado.rowCount === 0) {
+        if (!atualizarUsuario) {
             return res.status(400).json("O usuario não foi atualizado");
         }
 
@@ -105,6 +85,8 @@ const atualizarPerfil = async (req, res) => {
         return res.status(400).json(error.message);
     }
 }
+
+
 
 module.exports = {
     cadastrarUsuario,
